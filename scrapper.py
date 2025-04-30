@@ -1,7 +1,7 @@
 from typing import Literal
 import requests
-from bs4 import BeautifulSoup
-
+from bs4 import BeautifulSoup,Tag
+from wikipedia import WikipediaPage
 TaxonomicLevel = Literal["family", "species"]
 
 
@@ -44,6 +44,71 @@ def fetch_butterflies_and_moths_description(family_name: str) -> dict[str, str]:
 
     return result
 
+def fetch_vilkenart_description(family_name: str) -> dict[str, str]:
+    """
+    Fetches the family description from vilkenart.se and returns it in a dictionary.
+
+    Args:
+        family_name (str): Name of the family (e.g. 'Hesperiidae').
+
+    Returns:
+        dict: Dictionary with the source name as key and extracted description as value.
+    """
+    source_name = "vilkenart.se"
+    base_url = "https://www.vilkenart.se/HogreTaxa.aspx?Namn="
+    url = f"{base_url}{family_name}"
+    result = {}
+
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        description_div = soup.find("div", id="ctl00_ContentPlaceHolder1_pnlTaxonText")
+        if description_div:
+            text = description_div.get_text(separator=" ", strip=True)
+            result[source_name] = text
+        else:
+            print(f"[{source_name}] Description not found on page: {url}")
+            result[source_name] = ""
+
+    except requests.RequestException as e:
+        print(f"[{source_name}] Failed to fetch {url}: {e}")
+        result[source_name] = ""
+
+    return result
+
+def fetch_wikipedia_description(family_name: str) -> dict[str, str]:
+    """
+    Fetches the full Wikipedia content for a given taxonomic family.
+
+    Args:
+        family_name (str): Name of the family (e.g. 'Hesperiidae').
+
+    Returns:
+        dict: { 'wikipedia.org': description_text }
+    """
+    source_name = "wikipedia.org"
+    try:
+        page = WikipediaPage(family_name)
+        content = page.content
+
+        # Try to extract only the "Description" section if available
+        sections = content.split("\n==")
+        for section in sections:
+            if "description" in section.lower():
+                # Remove the heading line
+                lines = section.split("\n")
+                return {source_name: "\n".join(lines[1:]).strip()}
+
+        # Fallback: return beginning of full content
+        return {source_name: content.strip()}
+
+    except Exception as e:
+        print(f"[{source_name}] Failed to fetch page for {family_name}: {e}")
+        return {source_name: ""}
+
+
 
 
 def process_by_family(family_name: str) -> None:
@@ -54,15 +119,52 @@ def process_by_family(family_name: str) -> None:
         name (str): Name of the family (e.g. 'Formicidae').
     """
     print(f"Processing FAMILY: {family_name}")
-    description = fetch_butterflies_and_moths_description(family_name)
-    if description:
-        print(f"\n--- Description of {family_name} ---\n")
-        print(description)
-    else:
-        print("No description found.")
+    all_descriptions = {}
+    all_descriptions.update(fetch_butterflies_and_moths_description(family_name))
+    all_descriptions.update(fetch_vilkenart_description(family_name))
+    all_descriptions.update(fetch_wikipedia_description(family_name))
 
+    for source, desc in all_descriptions.items():
+        print(f"\n--- {source} ---\n{desc[:100]} desc_len:{len(desc)}\n")
 
     pass
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 def process_by_species(name: str) -> None:
@@ -70,7 +172,7 @@ def process_by_species(name: str) -> None:
     Process data at the species taxonomic level.
 
     Args:
-        name (str): Name of the species (e.g. 'Apis mellifera').
+        name (str): Name of the species (e.g. 'Attacus_atlas').
     """
     print(f"Processing SPECIES: {name}")
     # TODO: Implement species-level processing logic here
@@ -99,11 +201,10 @@ def main() -> None:
     """
     level_input = 'family'  # input("Enter the taxonomic level (family/species): ").strip().lower()
     name_input = 'Hesperiidae'
+    process_taxonomic_level(level_input, name_input)
 
-    try:
-        process_taxonomic_level(level_input, name_input)
-    except ValueError as e:
-        print(e)
+
+
 
 
 if __name__ == "__main__":
