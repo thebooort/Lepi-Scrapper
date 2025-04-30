@@ -133,7 +133,7 @@ def fetch_wikipedia_description(family_name: str) -> dict[str, str]:
         # Try to extract only the "Description" section if available
         sections = content.split("\n==")
         for section in sections:
-            if "description" in section.lower():
+            if "description" in section.lower() and len(section) > 20:
                 # Remove the heading line
                 lines = section.split("\n")
                 return {source_name: "\n".join(lines[1:]).strip()}
@@ -186,9 +186,14 @@ def fetch_wikipedia_species_description(species_name: str) -> dict[str, str]:
         # Try to extract a "Description"-related section
         sections = content.split("\n==")
         for section in sections:
-            if "description" in section.lower():
+            if "description" in section.lower() and len(section) > 20:
+                print(section)
                 lines = section.split("\n")
                 return {source_name: "\n".join(lines[1:]).strip()}
+            elif "imago" in section.lower() and len(section) > 20:
+                lines = section.split("\n")
+                return {source_name: "\n".join(lines[1:]).strip()}
+            
 
         # Fallback: return full content
         return {source_name: content.strip()}
@@ -528,7 +533,7 @@ def main() -> None:
     # process_taxonomic_level(level_input, name_input)
 
     level_input = 'species'  # input("Enter the taxonomic level (family/species): ").strip().lower()
-    name_input = 'Archiearis parthenias'
+    name_input = 'Attacus atlas'
     all_descriptions = process_taxonomic_level(level_input, name_input)
     print(all_descriptions)
 
