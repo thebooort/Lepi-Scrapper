@@ -2,7 +2,44 @@ from typing import Literal
 import requests
 from bs4 import BeautifulSoup,Tag
 from wikipedia import WikipediaPage
+import pandas as pd
+
+
 TaxonomicLevel = Literal["family", "species"]
+
+try:
+    df_dyntaxa = pd.read_csv("../dyntaxa_DB/Taxon.csv", sep="	", encoding="utf-8")
+
+except FileNotFoundError:
+    print("File not found. Please check the path to the dataset.")
+    df_dyntaxa = pd.DataFrame()
+
+import json
+
+with open("secrets.json") as f:
+    secrets = json.load(f)
+api_key = secrets.get("artfakta_api_key")
+
+
+
+def get_artfakta_id(species_name: str) -> str | None:
+    """
+    Given a scientific name, extract the numeric Artfakta taxon ID from the dataset.
+
+    Args:
+        species_name (str): Scientific name (e.g., 'Elymus caninus')
+        dataset_path (str): Path to CSV with column 'scientificName' and 'taxonId'
+
+    Returns:
+        str | None: Taxon ID number (e.g. '222441') or None if not found
+    """
+    df_dyntaxa["scientificName"] = df_dyntaxa["scientificName"].str.strip().str.lower()
+    match = df_dyntaxa[df_dyntaxa["scientificName"] == species_name.strip().lower()]
+    if not match.empty:
+        full_id = match.iloc[0]["taxonId"]
+        if isinstance(full_id, str) and full_id.startswith("urn:lsid:dyntaxa.se:Taxon:"):
+            return full_id.split(":")[-1]  # extract the number part
+    return None
 
 
 
@@ -390,6 +427,50 @@ def fetch_adw_species_description(species_name: str) -> dict[str, str]:
         return {source_name: ""}
 
 
+
+
+def fetch_artfakta_species_description_api(species_name: str) -> dict[str, str]:
+    """
+    Fetches the 'characteristic' field from the Artfakta API using a taxon ID.
+
+    Args:
+        taxon_id (str): The numeric taxon ID, e.g., '213903'.
+        api_key (str): Your Artfakta API key.
+
+    Returns:
+        dict: { 'artfakta.se': species description from 'characteristic' }
+    """
+
+    taxon_id = get_artfakta_id(species_name)
+    if taxon_id is None:   
+        raise ValueError(f"Taxon ID not found for species: {species_name}")
+
+    source_name = "artfakta.se"
+    url = f"https://api.artdatabanken.se/information/v1/speciesdataservice/v1/speciesdata/texts?taxa={taxon_id}"
+    headers = {
+        "Ocp-Apim-Subscription-Key": api_key,
+        "Cache-Control": "no-cache"
+    }
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+
+        if not data or not isinstance(data, list) or "speciesData" not in data[0]:
+            print(f"[{source_name}] Unexpected API response structure.")
+            return {source_name: ""}
+
+        characteristic = data[0]["speciesData"].get("characteristic", "").strip()
+
+        return {source_name: characteristic}
+
+    except requests.RequestException as e:
+        print(f"[{source_name}] API request failed: {e}")
+        return {source_name: ""}
+
+
+
+
 def process_by_species(spe_name: str) -> None:
     """
     Process data at the species taxonomic level.
@@ -397,13 +478,14 @@ def process_by_species(spe_name: str) -> None:
     Args:
         name (str): Name of the species (e.g. 'Attacus atlas').
     """
-    print(f"Processing FAMILY: {spe_name}")
+    print(f"Processing species: {spe_name}")
     all_descriptions = {}
-    # all_descriptions.update(fetch_wikipedia_species_description(spe_name))
+    all_descriptions.update(fetch_wikipedia_species_description(spe_name))
     all_descriptions.update(fetch_ukmoths_species_description(spe_name))
-    # all_descriptions.update(fetch_bamona_species_description(spe_name))
+    all_descriptions.update(fetch_bamona_species_description(spe_name))
     all_descriptions.update(fetch_nrm_species_description(spe_name))
-    # all_descriptions.update(fetch_adw_species_description(spe_name))
+    all_descriptions.update(fetch_adw_species_description(spe_name))
+    all_descriptions.update(fetch_artfakta_species_description_api(spe_name))
     for source, desc in all_descriptions.items():
         print(f"\n--- {source} ---\n{desc[:100]} \ndesc_len:{len(desc)}\n")
 
@@ -436,7 +518,7 @@ def main() -> None:
     # process_taxonomic_level(level_input, name_input)
 
     level_input = 'species'  # input("Enter the taxonomic level (family/species): ").strip().lower()
-    name_input = 'Archiearis parthenias'
+    name_input = 'Adela Croesella'
     all_descriptions = process_taxonomic_level(level_input, name_input)
     print(all_descriptions)
 
