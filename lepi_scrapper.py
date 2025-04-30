@@ -440,12 +440,12 @@ def fetch_artfakta_species_description_api(species_name: str) -> dict[str, str]:
     Returns:
         dict: { 'artfakta.se': species description from 'characteristic' }
     """
-
+    source_name = "artfakta.se"
     taxon_id = get_artfakta_id(species_name)
     if taxon_id is None:   
-        raise ValueError(f"Taxon ID not found for species: {species_name}")
+        return {source_name: ""}
 
-    source_name = "artfakta.se"
+    
     url = f"https://api.artdatabanken.se/information/v1/speciesdataservice/v1/speciesdata/texts?taxa={taxon_id}"
     headers = {
         "Ocp-Apim-Subscription-Key": api_key,
@@ -459,8 +459,11 @@ def fetch_artfakta_species_description_api(species_name: str) -> dict[str, str]:
         if not data or not isinstance(data, list) or "speciesData" not in data[0]:
             print(f"[{source_name}] Unexpected API response structure.")
             return {source_name: ""}
-
-        characteristic = data[0]["speciesData"].get("characteristic", "").strip()
+        if data[0]["speciesData"].get("characteristic", "") == None:
+            print(f"[{source_name}] 'characteristic' field not found in API response.")
+            return {source_name: ""}
+        else:
+            characteristic = data[0]["speciesData"].get("characteristic", "").strip()
 
         return {source_name: characteristic}
 
@@ -471,7 +474,7 @@ def fetch_artfakta_species_description_api(species_name: str) -> dict[str, str]:
 
 
 
-def process_by_species(spe_name: str) -> None:
+def process_by_species(spe_name: str) -> dict[str, str]:
     """
     Process data at the species taxonomic level.
 
@@ -480,11 +483,18 @@ def process_by_species(spe_name: str) -> None:
     """
     print(f"Processing species: {spe_name}")
     all_descriptions = {}
+    print("Fetching descriptions...")
+    print("wikipedia.org")
     all_descriptions.update(fetch_wikipedia_species_description(spe_name))
+    print("ukmoths.org.uk")
     all_descriptions.update(fetch_ukmoths_species_description(spe_name))
+    print("butterfliesandmoths.org")
     all_descriptions.update(fetch_bamona_species_description(spe_name))
+    print("animaldiversity.org")
     all_descriptions.update(fetch_nrm_species_description(spe_name))
+    print("nrm.se")
     all_descriptions.update(fetch_adw_species_description(spe_name))
+    print("artfakta.se")
     all_descriptions.update(fetch_artfakta_species_description_api(spe_name))
     for source, desc in all_descriptions.items():
         print(f"\n--- {source} ---\n{desc[:100]} \ndesc_len:{len(desc)}\n")
@@ -518,14 +528,9 @@ def main() -> None:
     # process_taxonomic_level(level_input, name_input)
 
     level_input = 'species'  # input("Enter the taxonomic level (family/species): ").strip().lower()
-    name_input = 'Adela Croesella'
+    name_input = 'Archiearis parthenias'
     all_descriptions = process_taxonomic_level(level_input, name_input)
     print(all_descriptions)
-
-
-
-
-
 
 if __name__ == "__main__":
     main()
