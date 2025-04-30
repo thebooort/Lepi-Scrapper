@@ -199,16 +199,157 @@ def fetch_ukmoths_species_description(species_name: str) -> dict[str, str]:
         print(f"[{source_name}] Failed to fetch {url}: {e}")
         return {source_name: ""}
 
+import requests
+from bs4 import BeautifulSoup
+
+
+def fetch_bamona_species_description(species_name: str) -> dict[str, str]:
+    """
+    Fetches detailed species information from Butterflies and Moths of North America (BAMONA).
+
+    Args:
+        species_name (str): Scientific name of the species (e.g., 'Korscheltellus lupulina').
+
+    Returns:
+        dict: { 'butterfliesandmoths.org': multiline description with labeled fields }
+    """
+    source_name = "butterfliesandmoths.org"
+    base_url = "https://www.butterfliesandmoths.org/species/"
+    species_slug = species_name.strip().replace(" ", "-")
+    url = f"{base_url}{species_slug}"
+    result = {}
+
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        description_block = soup.find("div", class_="pane-content")
+        if not description_block:
+            print(f"[{source_name}] Description block not found at {url}")
+            return {source_name: ""}
+
+        # Extract all field pairs: label and content
+        data = []
+        fields = description_block.find_all("div", class_="views-field")
+        for field in fields:
+            label_tag = field.find("strong", class_="views-label")
+            content_tag = field.find("span", class_="field-content")
+
+            if label_tag and content_tag:
+                label = label_tag.get_text(strip=True).rstrip(":")
+                content = content_tag.get_text(strip=True)
+                if content:
+                    data.append(f"{label}: {content}")
+
+        if data:
+            result[source_name] = "\n".join(data)
+        else:
+            result[source_name] = ""
+
+        return result
+
+    except requests.RequestException as e:
+        print(f"[{source_name}] Failed to fetch {url}: {e}")
+        return {source_name: ""}
+
+
+import requests
+from bs4 import BeautifulSoup
+
+
+def fetch_nrm_species_description(species_name: str) -> dict[str, str]:
+    """
+    Fetches the descriptive text from NRM Svenska Fjärilar for a given species.
+    Extracts only the section between 'Kännetecken:' and 'Utbredning:'.
+
+    Args:
+        species_name (str): Scientific name (e.g., 'Korscheltellus lupulina').
+
+    Returns:
+        dict: { 'nrm.se': cleaned_description }
+    """
+    source_name = "nrm.se"
+    base_url = "http://www2.nrm.se/en/svenska_fjarilar/"
+    species_slug = species_name.lower().replace(" ", "_")
+    first_letter = species_slug[0]
+    url = f"{base_url}{first_letter}/{species_slug}.html"
+    result = {}
+
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.content, "html.parser")
+
+        td = soup.find("td", valign="TOP", align="LEFT")
+        if not td:
+            print(f"[{source_name}] No matching <td> found at {url}")
+            return {source_name: ""}
+
+        full_text = td.get_text(separator="\n", strip=True)
+
+        start_key = "Kännetecken:"
+        end_key = "Utbredning:"
+        start_idx = full_text.find(start_key)
+        end_idx = full_text.find(end_key)
+
+        if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+            cleaned_text = full_text[start_idx:end_idx].strip()
+        elif start_idx != -1:
+            cleaned_text = full_text[start_idx:].strip()
+        else:
+            cleaned_text = ""
+
+        result[source_name] = cleaned_text
+        return result
+
+    except requests.RequestException as e:
+        print(f"[{source_name}] Failed to fetch {url}: {e}")
+        return {source_name: ""}
 
 
 
+def fetch_adw_species_description(species_name: str) -> dict[str, str]:
+    """
+    Obtiene la descripción de la especie desde Animal Diversity Web (ADW).
 
+    Args:
+        species_name (str): Nombre científico de la especie (por ejemplo, 'Attacus atlas').
 
+    Returns:
+        dict: {'animaldiversity.org': texto_descripción}
+    """
+    source_name = "animaldiversity.org"
+    base_url = "https://animaldiversity.org/accounts/"
+    species_slug = species_name.strip().replace(" ", "_")
+    url = f"{base_url}{species_slug}/"
+    result = {}
 
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, "html.parser")
 
+        # Buscar la sección de descripción física
+        description_section = soup.find("h2", string="Physical Description")
+        if description_section:
+            paragraphs = []
+            for sibling in description_section.find_next_siblings():
+                if sibling.name == "h2":
+                    break
+                if sibling.name == "p":
+                    paragraphs.append(sibling.get_text(strip=True))
+            description_text = "\n\n".join(paragraphs)
+            result[source_name] = description_text
+        else:
+            print(f"[{source_name}] Sección 'Physical Description' no encontrada en {url}")
+            result[source_name] = ""
 
+        return result
 
-
+    except requests.RequestException as e:
+        print(f"[{source_name}] Error al acceder a {url}: {e}")
+        return {source_name: ""}
 
 
 
@@ -217,17 +358,19 @@ def process_by_species(spe_name: str) -> None:
     Process data at the species taxonomic level.
 
     Args:
-        name (str): Name of the species (e.g. 'Attacus_atlas').
+        name (str): Name of the species (e.g. 'Attacus atlas').
     """
     print(f"Processing FAMILY: {spe_name}")
     all_descriptions = {}
-    all_descriptions.update(fetch_wikipedia_species_description(spe_name))
-    all_descriptions.update(fetch_ukmoths_species_description(spe_name))
+    # all_descriptions.update(fetch_wikipedia_species_description(spe_name))
+    # all_descriptions.update(fetch_ukmoths_species_description(spe_name))
+    # all_descriptions.update(fetch_bamona_species_description(spe_name))
+    all_descriptions.update(fetch_nrm_species_description(spe_name))
 
     for source, desc in all_descriptions.items():
-        print(f"\n--- {source} ---\n{desc[:100]} desc_len:{len(desc)}\n")
+        print(f"\n--- {source} ---\n{desc[:100]} \ndesc_len:{len(desc)}\n")
 
-    pass
+    return all_descriptions
 
 
 def process_taxonomic_level(level: TaxonomicLevel, name: str) -> None:
@@ -239,11 +382,12 @@ def process_taxonomic_level(level: TaxonomicLevel, name: str) -> None:
         name (str): Name of the taxonomic group.
     """
     if level == "family":
-        process_by_family(name)
+        all_descriptions=process_by_family(name)
     elif level == "species":
-        process_by_species(name)
+        all_descriptions=process_by_species(name)
     else:
         raise ValueError(f"Unsupported taxonomic level: '{level}'")
+    return all_descriptions
 
 
 def main() -> None:
@@ -256,7 +400,9 @@ def main() -> None:
 
     level_input = 'species'  # input("Enter the taxonomic level (family/species): ").strip().lower()
     name_input = 'Korscheltellus lupulina'
-    process_taxonomic_level(level_input, name_input)
+    all_descriptions = process_taxonomic_level(level_input, name_input)
+    print(all_descriptions)
+
 
 
 
