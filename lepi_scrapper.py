@@ -36,8 +36,8 @@ def get_artfakta_id(species_name: str) -> str | None:
     df_dyntaxa["scientificName"] = df_dyntaxa["scientificName"].str.strip().str.lower()
     match = df_dyntaxa[df_dyntaxa["scientificName"] == species_name.strip().lower()]
     if not match.empty:
-        full_id = match.iloc[0]["taxonId"]
-        if isinstance(full_id, str) and full_id.startswith("urn:lsid:dyntaxa.se:Taxon:"):
+        full_id = match.iloc[0]["acceptedNameUsageID"]
+        if isinstance(full_id, str):
             return full_id.split(":")[-1]  # extract the number part
     return None
 
@@ -447,6 +447,7 @@ def fetch_artfakta_species_description_api(species_name: str) -> dict[str, str]:
     """
     source_name = "artfakta.se"
     taxon_id = get_artfakta_id(species_name)
+    print(f"Taxon ID for {species_name}: {taxon_id}")
     if taxon_id is None:   
         return {source_name: ""}
 
@@ -489,16 +490,16 @@ def process_by_species(spe_name: str) -> dict[str, str]:
     print(f"Processing species: {spe_name}")
     all_descriptions = {}
     print("Fetching descriptions...")
-    print("wikipedia.org")
-    all_descriptions.update(fetch_wikipedia_species_description(spe_name))
-    print("ukmoths.org.uk")
-    all_descriptions.update(fetch_ukmoths_species_description(spe_name))
-    print("butterfliesandmoths.org")
-    all_descriptions.update(fetch_bamona_species_description(spe_name))
-    print("animaldiversity.org")
-    all_descriptions.update(fetch_nrm_species_description(spe_name))
-    print("nrm.se")
-    all_descriptions.update(fetch_adw_species_description(spe_name))
+    # print("wikipedia.org")
+    # all_descriptions.update(fetch_wikipedia_species_description(spe_name))
+    # print("ukmoths.org.uk")
+    # all_descriptions.update(fetch_ukmoths_species_description(spe_name))
+    # print("butterfliesandmoths.org")
+    # all_descriptions.update(fetch_bamona_species_description(spe_name))
+    # print("animaldiversity.org")
+    # all_descriptions.update(fetch_nrm_species_description(spe_name))
+    # print("nrm.se")
+    # all_descriptions.update(fetch_adw_species_description(spe_name))
     print("artfakta.se")
     all_descriptions.update(fetch_artfakta_species_description_api(spe_name))
     for source, desc in all_descriptions.items():
@@ -533,7 +534,7 @@ def main() -> None:
     # process_taxonomic_level(level_input, name_input)
 
     level_input = 'species'  # input("Enter the taxonomic level (family/species): ").strip().lower()
-    name_input = 'Attacus atlas'
+    name_input = 'Korscheltellus lupulina'
     all_descriptions = process_taxonomic_level(level_input, name_input)
     print(all_descriptions)
 
