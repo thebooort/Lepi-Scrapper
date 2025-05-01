@@ -1,6 +1,6 @@
 from typing import Literal
 import requests
-from bs4 import BeautifulSoup,Tag
+from bs4 import BeautifulSoup
 from wikipedia import WikipediaPage
 import pandas as pd
 
@@ -11,14 +11,18 @@ try:
     df_dyntaxa = pd.read_csv("../dyntaxa_DB/Taxon.csv", sep="	", encoding="utf-8")
 
 except FileNotFoundError:
-    print("File not found. Please check the path to the dataset.")
+    print("File not found. Please check the path to the dataset for the taxon id generation.")
     df_dyntaxa = pd.DataFrame()
 
 import json
 
-with open("secrets.json") as f:
-    secrets = json.load(f)
-api_key = secrets.get("artfakta_api_key")
+try:
+    with open("secrets.json") as f:
+        secrets = json.load(f)
+    api_key = secrets.get("artfakta_api_key")
+except FileNotFoundError:
+    print("secrets.json file not found. Please create it with your API key.")
+    api_key = None
 
 
 
@@ -41,6 +45,73 @@ def get_artfakta_id(species_name: str) -> str | None:
             return full_id.split(":")[-1]  # extract the number part
     return None
 
+def get_artfakta_id_fam(family_name: str) -> str | None:
+    """
+    Given a scientific name, extract the numeric Artfakta taxon ID from the dataset.
+
+    Args:
+        species_name (str): Scientific name (e.g., 'Elymus caninus')
+        dataset_path (str): Path to CSV with column 'scientificName' and 'taxonId'
+
+    Returns:
+        str | None: Taxon ID number (e.g. '222441') or None if not found
+    """
+    df_dyntaxa["scientificName"] = df_dyntaxa["scientificName"].str.strip().str.lower()
+    match = df_dyntaxa[
+        (df_dyntaxa["scientificName"].str.strip().str.lower() == family_name.strip().lower()) &
+        (df_dyntaxa["taxonRank"].str.strip().str.lower() == "family")
+]    
+    if not match.empty:
+        full_id = match.iloc[0]["acceptedNameUsageID"]
+        if isinstance(full_id, str):
+            return full_id.split(":")[-1]  # extract the number part
+    return None
+
+
+
+
+def fetch_artfakta_family_description_api(fam_name: str) -> dict[str, str]:
+    """
+    Fetches the 'characteristic' field from the Artfakta API using a taxon ID.
+
+    Args:
+        taxon_id (str): The numeric taxon ID, e.g., '213903'.
+        api_key (str): Your Artfakta API key.
+
+    Returns:
+        dict: { 'artfakta.se': species description from 'characteristic' }
+    """
+    source_name = "artfakta.se"
+    taxon_id = get_artfakta_id(fam_name)
+    #print(f"Taxon ID for {species_name}: {taxon_id}")
+    if taxon_id is None:   
+        return {source_name: ""}
+
+    
+    url = f"https://api.artdatabanken.se/information/v1/speciesdataservice/v1/speciesdata/texts?taxa={taxon_id}"
+    headers = {
+        "Ocp-Apim-Subscription-Key": api_key,
+        "Cache-Control": "no-cache"
+    }
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+
+        if not data or not isinstance(data, list) or "speciesData" not in data[0]:
+            print(f"[{source_name}] Unexpected API response structure.")
+            return {source_name: ""}
+        if data[0]["speciesData"].get("characteristic", "") == None:
+            print(f"[{source_name}] 'characteristic' field not found in API response.")
+            return {source_name: ""}
+        else:
+            characteristic = data[0]["speciesData"].get("characteristic", "").strip()
+
+        return {source_name: characteristic}
+
+    except requests.RequestException as e:
+        print(f"[{source_name}] API request failed: {e}")
+        return {source_name: ""}
 
 
 def fetch_butterflies_and_moths_description(family_name: str) -> dict[str, str]:
@@ -57,7 +128,7 @@ def fetch_butterflies_and_moths_description(family_name: str) -> dict[str, str]:
     base_url = "https://www.butterfliesandmoths.org/taxonomy/"
     url = f"{base_url}{family_name}"
     result = {}
-    print(url)
+    #print(url)
     try:
         response = requests.get(url, timeout=10)
         response.raise_for_status()
@@ -95,7 +166,7 @@ def fetch_vilkenart_description(family_name: str) -> dict[str, str]:
     base_url = "https://www.vilkenart.se/HogreTaxa.aspx?Namn="
     url = f"{base_url}{family_name}"
     result = {}
-    print(url)
+    #print(url)
     try:
         response = requests.get(url, timeout=10)
         response.raise_for_status()
@@ -158,13 +229,15 @@ def process_by_family(family_name: str) -> None:
     print(f"Processing FAMILY: {family_name}")
     all_descriptions = {}
     all_descriptions.update(fetch_butterflies_and_moths_description(family_name))
-    all_descriptions.update(fetch_vilkenart_description(family_name))
     all_descriptions.update(fetch_wikipedia_description(family_name))
+    all_descriptions.update(fetch_vilkenart_description(family_name))
+    all_descriptions.update(fetch_artfakta_family_description_api(family_name))
+
 
     for source, desc in all_descriptions.items():
-        print(f"\n--- {source} ---\n{desc[:100]} desc_len:{len(desc)}\n")
+        print(f"\n--- {source} ---\n{desc[:100]} \ndesc_len:{len(desc)}\n")
 
-    pass
+    return all_descriptions
 
 
 def fetch_wikipedia_species_description(species_name: str) -> dict[str, str]:
@@ -187,7 +260,7 @@ def fetch_wikipedia_species_description(species_name: str) -> dict[str, str]:
         sections = content.split("\n==")
         for section in sections:
             if "description" in section.lower() and len(section) > 20:
-                print(section)
+                #print(section)
                 lines = section.split("\n")
                 return {source_name: "\n".join(lines[1:]).strip()}
             elif "imago" in section.lower() and len(section) > 20:
@@ -242,14 +315,8 @@ def fetch_ukmoths_species_description(species_name: str) -> dict[str, str]:
             text = content_div.get_text(separator="", strip=True)
 
         full_text = text
-        # Slice after first ')'
-        if ")" in full_text:
-            idx = full_text.find(")") + 1
-            trimmed_text = full_text[idx:].lstrip()
-        else:
-            trimmed_text = full_text
 
-        result[source_name] = trimmed_text
+        result[source_name] = full_text
         return result
 
 
@@ -273,7 +340,7 @@ def fetch_bamona_species_description(species_name: str) -> dict[str, str]:
     species_slug = species_name.strip().replace(" ", "-")
     url = f"{base_url}{species_slug}"
     result = {}
-    print(url)
+    #print(url)
     try:
         response = requests.get(url, timeout=10)
         response.raise_for_status()
@@ -313,7 +380,7 @@ import requests
 from bs4 import BeautifulSoup
 
 
-def fetch_nrm_species_description(species_name: str, debug: bool = False) -> dict[str, str]:
+def fetch_nrm_species_description(species_name: str) -> dict[str, str]:
     """
     Fetches the descriptive text from NRM Svenska Fjärilar for a given species.
     - If the page includes 'Kännetecken:' and 'Utbredning:', extracts that section.
@@ -332,9 +399,6 @@ def fetch_nrm_species_description(species_name: str, debug: bool = False) -> dic
     first_letter = species_slug[0]
     url = f"{base_url}{first_letter}/{species_slug}.html"
     result = {}
-
-    if debug:
-        print(f"[DEBUG] Fetching: {url}")
 
     try:
         response = requests.get(url, timeout=10)
@@ -447,7 +511,7 @@ def fetch_artfakta_species_description_api(species_name: str) -> dict[str, str]:
     """
     source_name = "artfakta.se"
     taxon_id = get_artfakta_id(species_name)
-    print(f"Taxon ID for {species_name}: {taxon_id}")
+    #print(f"Taxon ID for {species_name}: {taxon_id}")
     if taxon_id is None:   
         return {source_name: ""}
 
@@ -490,17 +554,17 @@ def process_by_species(spe_name: str) -> dict[str, str]:
     print(f"Processing species: {spe_name}")
     all_descriptions = {}
     print("Fetching descriptions...")
-    # print("wikipedia.org")
-    # all_descriptions.update(fetch_wikipedia_species_description(spe_name))
-    # print("ukmoths.org.uk")
-    # all_descriptions.update(fetch_ukmoths_species_description(spe_name))
-    # print("butterfliesandmoths.org")
-    # all_descriptions.update(fetch_bamona_species_description(spe_name))
-    # print("animaldiversity.org")
-    # all_descriptions.update(fetch_nrm_species_description(spe_name))
-    # print("nrm.se")
-    # all_descriptions.update(fetch_adw_species_description(spe_name))
-    print("artfakta.se")
+    print("wikipedia.org")
+    all_descriptions.update(fetch_wikipedia_species_description(spe_name))
+    print("ukmoths.org.uk")
+    all_descriptions.update(fetch_ukmoths_species_description(spe_name))
+    print("butterfliesandmoths.org")
+    all_descriptions.update(fetch_bamona_species_description(spe_name))
+    #print("animaldiversity.org")
+    all_descriptions.update(fetch_nrm_species_description(spe_name))
+    #print("nrm.se")
+    all_descriptions.update(fetch_adw_species_description(spe_name))
+    #print("artfakta.se")
     all_descriptions.update(fetch_artfakta_species_description_api(spe_name))
     for source, desc in all_descriptions.items():
         print(f"\n--- {source} ---\n{desc[:100]} \ndesc_len:{len(desc)}\n")
@@ -525,18 +589,12 @@ def process_taxonomic_level(level: TaxonomicLevel, name: str) -> None:
     return all_descriptions
 
 
-def main() -> None:
-    """
-    Main entry point for the script. Prompts user to select taxonomic level and name.
-    """
-    # level_input = 'family'  # input("Enter the taxonomic level (family/species): ").strip().lower()
-    # name_input = 'Hesperiidae'
-    # process_taxonomic_level(level_input, name_input)
-
-    level_input = 'species'  # input("Enter the taxonomic level (family/species): ").strip().lower()
-    name_input = 'Korscheltellus lupulina'
-    all_descriptions = process_taxonomic_level(level_input, name_input)
-    print(all_descriptions)
-
 if __name__ == "__main__":
-    main()
+    level_input = 'family'  # input("Enter the taxonomic level (family/species): ").strip().lower()
+    name_input = 'Hesperiidae'
+    all_descriptions = process_taxonomic_level(level_input, name_input)
+
+    # level_input = 'species'  # input("Enter the taxonomic level (family/species): ").strip().lower()
+    # name_input = 'Neocochylis hybridella '
+    # all_descriptions = process_taxonomic_level(level_input, name_input)
+    print(all_descriptions)

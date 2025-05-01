@@ -21,7 +21,7 @@ def process_species_list_with_routing(file_path: str, level: str) -> pd.DataFram
 
     all_rows = []
     for name in taxon_names:
-        print(f"\n=== 🧬 Processing {level}: {name} ===")
+        print(f"\n=== Processing {level}: {name} ===")
         descriptions = process_taxonomic_level(level, name)
         for source, desc in descriptions.items():
             all_rows.append({
@@ -36,9 +36,7 @@ def process_species_list_with_routing(file_path: str, level: str) -> pd.DataFram
     return df
 
 if __name__ == "__main__":
-    level = 'species'
-    df = process_species_list_with_routing("species_list.txt", level)
-    print("\n✅ Final DataFrame:\n")
-    print(df)
-    df.to_csv("species_descriptions.csv", index=False)
-    print("\n✅ Saved to 'species_descriptions.csv'")
+    level = 'family'
+    df = process_species_list_with_routing("../family_list.txt", level)
+    df.to_csv("families_descriptions.csv", index=False)
+    print("\nSaved to 'families_descriptions.csv'")
