@@ -4,23 +4,41 @@ import os
 from lepi_scrapper import get_artfakta_id, process_taxonomic_level
 
 
-def load_species_list(file_path: str) -> list[str]:
-    with open(file_path, "r") as f:
-        return [line.strip() for line in f if line.strip()]
 
+def process_species_list_with_routing(file_path: str, level: str) -> pd.DataFrame:
+    """
+    Procesa una lista de taxones (especies o familias), usando process_taxonomic_level.
 
-def main():
-    level_input = "species"
-    species_list = load_species_list("species_list.txt")
-    print(f"🔍 Loaded {len(species_list)} species")
+    Args:
+        file_path (str): Ruta al archivo de texto con nombres (uno por línea).
+        level (TaxonomicLevel): 'species' o 'family'.
 
+    Returns:
+        pd.DataFrame: DataFrame con columnas [species, source, description, desc_len]
+    """
+    with open(file_path) as f:
+        taxon_names = [line.strip() for line in f if line.strip()]
 
-    records = []
-    for species in species_list:
-        print(f"📄 Processing: {species}")
-        all_descriptions = process_taxonomic_level(level_input, species)
-    print(all_descriptions)
+    all_rows = []
+    for name in taxon_names:
+        print(f"\n=== 🧬 Processing {level}: {name} ===")
+        descriptions = process_taxonomic_level(level, name)
+        for source, desc in descriptions.items():
+            all_rows.append({
+                "taxon": name,
+                "level": level,
+                "source": source,
+                "description": desc,
+                "desc_len": len(desc)
+            })
 
+    df = pd.DataFrame(all_rows)
+    return df
 
 if __name__ == "__main__":
-    main()
+    level = 'species'
+    df = process_species_list_with_routing("species_list.txt", level)
+    print("\n✅ Final DataFrame:\n")
+    print(df)
+    df.to_csv("species_descriptions.csv", index=False)
+    print("\n✅ Saved to 'species_descriptions.csv'")
