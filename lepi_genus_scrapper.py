@@ -48,7 +48,7 @@ def get_artfakta_id_gen(family_name: str) -> str | None:
 
 
 
-def fetch_artfakta_genus_description_api(fam_name: str) -> dict[str, str]:
+def fetch_artfakta_genus_description_api(gen_name: str) -> dict[str, str]:
     """
     Fetches the 'characteristic' field from the Artfakta API using a taxon ID.
 
@@ -60,13 +60,13 @@ def fetch_artfakta_genus_description_api(fam_name: str) -> dict[str, str]:
         dict: { 'artfakta.se': genus description from 'characteristic' }
     """
     source_name = "artfakta.se"
-    taxon_id = get_artfakta_id_gen(fam_name)
-    #print(f"Taxon ID for {genus_name}: {taxon_id}")
+    taxon_id = get_artfakta_id_gen(gen_name)
+    print(f"Taxon ID for {gen_name}: {taxon_id}")
     if taxon_id is None:   
         return {source_name: ""}
 
     
-    url = f"https://api.artdatabanken.se/information/v1/genusdataservice/v1/genusdata/texts?taxa={taxon_id}"
+    url = f"https://api.artdatabanken.se/information/v1/speciesdataservice/v1/speciesdata/texts?taxa={taxon_id}"
     headers = {
         "Ocp-Apim-Subscription-Key": api_key,
         "Cache-Control": "no-cache"
@@ -75,15 +75,15 @@ def fetch_artfakta_genus_description_api(fam_name: str) -> dict[str, str]:
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         data = response.json()
-
-        if not data or not isinstance(data, list) or "genusData" not in data[0]:
+        print(data)
+        if not data or not isinstance(data, list) or "speciesData" not in data[0]:
             print(f"[{source_name}] Unexpected API response structure.")
             return {source_name: ""}
-        if data[0]["genusData"].get("characteristic", "") == None:
+        if data[0]["speciesData"].get("characteristic", "") == None:
             print(f"[{source_name}] 'characteristic' field not found in API response.")
             return {source_name: ""}
         else:
-            characteristic = data[0]["genusData"].get("characteristic", "").strip()
+            characteristic = data[0]["speciesData"].get("characteristic", "").strip()
 
         return {source_name: characteristic}
 
@@ -201,6 +201,6 @@ def process_taxonomic_level(level: TaxonomicLevel, name: str) -> None:
 
 if __name__ == "__main__":
     level_input = 'genus'
-    name_input = 'Abraxas'
+    name_input = 'Melitaea'
     all_descriptions = process_taxonomic_level(level_input, name_input)
     print(all_descriptions)

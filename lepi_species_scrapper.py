@@ -396,6 +396,6 @@ def process_taxonomic_level(level: TaxonomicLevel, name: str) -> None:
 if __name__ == "__main__":
 
     level_input = 'species'  # input("Enter the taxonomic level (family/species): ").strip().lower()
-    name_input = 'Neocochylis hybridella '
+    name_input = 'Cochylis hybridella'
     all_descriptions = process_taxonomic_level(level_input, name_input)
     print(all_descriptions)
