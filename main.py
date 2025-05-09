@@ -1,5 +1,5 @@
 import pandas as pd
-from lepi_genus_scrapper import process_taxonomic_level as process_genus_taxonomic_level
+from lepi_species_scrapper import process_taxonomic_level as process_species_taxonomic_level
 
 
 
@@ -20,7 +20,7 @@ def process_species_list_with_routing(file_path: str, level: str) -> pd.DataFram
     all_rows = []
     for name in taxon_names:
         print(f"\n=== Processing {level}: {name} ===")
-        descriptions = process_genus_taxonomic_level(level, name)
+        descriptions = process_species_taxonomic_level(level, name)
         for source, desc in descriptions.items():
             all_rows.append({
                 "taxon": name,
@@ -34,7 +34,7 @@ def process_species_list_with_routing(file_path: str, level: str) -> pd.DataFram
     return df
 
 if __name__ == "__main__":
-    level = 'genus'
-    df = process_species_list_with_routing("../genus_list.txt", level)
-    df.to_csv("genus_descriptions.csv", index=False)
-    print("\nSaved to 'genus_descriptions.csv'")
+    level = 'species'
+    df = process_species_list_with_routing("../taxon_list.txt", level)
+    df.to_csv("species_descriptions.csv", index=False)
+    print("\nSaved to 'species_descriptions.csv'")
