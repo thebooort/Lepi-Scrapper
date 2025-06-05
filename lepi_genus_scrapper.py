@@ -170,15 +170,15 @@ def process_by_genus(family_name: str) -> None:
     Args:
         name (str): Name of the family (e.g. 'Formicidae').
     """
-    print(f"Processing FAMILY: {family_name}")
+    print(f"Processing GENUS: {family_name}")
     all_descriptions = {}
     all_descriptions.update(fetch_butterflies_and_moths_genus_description(family_name))
     all_descriptions.update(fetch_wikipedia_genus_description(family_name))
     all_descriptions.update(fetch_artfakta_genus_description_api(family_name))
 
 
-    for source, desc in all_descriptions.items():
-        print(f"\n--- {source} ---\n{desc[:100]} \ndesc_len:{len(desc)}\n")
+    # for source, desc in all_descriptions.items():
+    #     print(f"\n--- {source} ---\n{desc[:100]} \ndesc_len:{len(desc)}\n")
 
     return all_descriptions
 

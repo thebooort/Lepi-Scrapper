@@ -25,7 +25,7 @@ except FileNotFoundError:
     api_key = None
 
 
-def get_artfakta_id_fam(family_name: str) -> str | None:
+def get_artfakta_id(family_name: str) -> str | None:
     """
     Given a scientific name, extract the numeric Artfakta taxon ID from the dataset.
 
